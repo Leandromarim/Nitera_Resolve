@@ -1,0 +1,125 @@
+# NITERA Resolve — central de chamados (TI, Infraestrutura, Manutenção e Comunicação)
+# Uso: bash deploy/instalar.sh (gera o .env e sobe tudo) ou: cp .env.example .env && (edite o .env) && docker compose up -d --build
+name: nitera-resolve
+
+# Logs dos containers com tamanho limitado (3 arquivos de 10 MB por serviço): o disco não enche com o tempo.
+x-logging: &logs
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  postgres:
+    logging: *logs
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: resolve
+      POSTGRES_USER: resolve
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U resolve"]
+      interval: 10s
+      retries: 5
+    networks: [internal]
+
+  api:
+    logging: *logs
+    build: { context: ., dockerfile: apps/api/Dockerfile }
+    restart: unless-stopped
+    env_file: .env
+    init: true
+    environment:
+      DATABASE_URL: postgresql://resolve:${POSTGRES_PASSWORD}@postgres:5432/resolve
+      NODE_ENV: production
+    depends_on:
+      postgres: { condition: service_healthy }
+    volumes:
+      - uploads:/data/uploads
+    networks: [internal]
+    read_only: true
+    tmpfs: [/tmp]
+    security_opt: ["no-new-privileges:true"]
+
+  web:
+    logging: *logs
+    build: { context: ., dockerfile: apps/web/Dockerfile }
+    restart: unless-stopped
+    environment:
+      API_INTERNAL_URL: http://api:4000
+    init: true
+    depends_on: [api]
+    networks: [internal]
+    read_only: true
+    tmpfs: [/tmp, /app/apps/web/.next/cache]
+    security_opt: ["no-new-privileges:true"]
+
+  caddy:
+    logging: *logs
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports: ["80:80", "443:443"]
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:?defina SITE_ADDRESS no .env}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./deploy/manutencao:/srv/manutencao:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [web, api]
+    networks: [internal]
+
+  # Backup diário do banco e dos arquivos (mantém 14 dias) em ./backups.
+  # Cada cópia é conferida antes de valer: arquivo com erro é apagado, e as antigas só saem depois de uma cópia boa.
+  # backups/ULTIMO_OK e backups/ULTIMA_FALHA guardam a data da última cópia boa e da última que falhou.
+  # O instalador recria este contêiner a cada atualização (a pasta muda de lugar quando a versão é trocada).
+  backup:
+    logging: *logs
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - ./backups:/backups
+      - uploads:/data/uploads:ro
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        while true; do
+          d=$$(date +%F_%H%M)
+          ok=1
+          if pg_dump -h postgres -U resolve -Fc -f /backups/resolve_$$d.dump.tmp resolve && pg_restore -l /backups/resolve_$$d.dump.tmp > /dev/null; then
+            mv /backups/resolve_$$d.dump.tmp /backups/resolve_$$d.dump
+          else
+            rm -f /backups/resolve_$$d.dump.tmp; ok=0; echo "ERRO: backup do banco $$d falhou"
+          fi
+          # páginas convertidas (.doc-cache) e arquivos temporários são refeitos sozinhos: ficam fora do backup
+          tar czf /backups/uploads_$$d.tar.gz.tmp --exclude=.doc-cache --exclude=variantes --exclude=.tmp-videos -C /data uploads
+          if gzip -t /backups/uploads_$$d.tar.gz.tmp && tar tzf /backups/uploads_$$d.tar.gz.tmp > /dev/null; then
+            mv /backups/uploads_$$d.tar.gz.tmp /backups/uploads_$$d.tar.gz
+          else
+            rm -f /backups/uploads_$$d.tar.gz.tmp; ok=0; echo "ERRO: backup dos arquivos $$d falhou"
+          fi
+          if [ $$ok = 1 ]; then
+            echo "$$d" > /backups/ULTIMO_OK; echo "backup $$d ok"
+            find /backups -maxdepth 1 -type f \( -name 'resolve_*.dump' -o -name 'uploads_*.tar.gz' -o -name '*.tmp' \) -mtime +14 -delete
+          else
+            echo "$$d" > /backups/ULTIMA_FALHA
+          fi
+          sleep 86400
+        done
+    depends_on:
+      postgres: { condition: service_healthy }
+    networks: [internal]
+
+volumes:
+  pgdata:
+  uploads:
+  caddy_data:
+  caddy_config:
+
+networks:
+  internal:

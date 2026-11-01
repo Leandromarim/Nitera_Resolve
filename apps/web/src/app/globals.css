@@ -1,0 +1,321 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/inter';
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, sans-serif;
+
+  /* Cores padrão (trocáveis em Instituição e aparência) */
+  --color-brand-50: #f1f4fb;
+  --color-brand-100: #e1e7f5;
+  --color-brand-200: #c5d0eb;
+  --color-brand-300: #9cafdc;
+  --color-brand-400: #6f87c6;
+  --color-brand-500: #5269a3;
+  --color-brand-600: #45598e;
+  --color-brand-700: #3c4b78;
+  --color-brand-800: #2f3b5f;
+  --color-brand-900: #1f2a4d;
+  --color-brand-950: #141b33;
+
+  --color-coral-400: #ff8a70;
+  --color-coral-500: #ff6b4a;
+  --color-coral-600: #ec5232;
+  --color-amber-brand: #f5a524;
+
+  /* WhatsApp-like chat */
+  --color-chat-green: #25d366;
+  --color-chat-bubble: #d9fdd3;
+  --color-chat-bubble-dark: #005c4b;
+  --color-chat-bg: #efeae2;
+  --color-chat-bg-dark: #0b141a;
+  --color-chat-panel-dark: #111b21;
+  --color-chat-header-dark: #202c33;
+  --color-chat-read: #53bdeb;
+
+  /* Escala de profundidade (design system 2026): sombras suaves em camadas, com a cor da marca no lugar do preto */
+  --shadow-soft: 0 1px 2px rgb(15 23 42 / 0.04), 0 1px 1px rgb(15 23 42 / 0.03);
+  --shadow-card: 0 1px 2px rgb(15 23 42 / 0.04), 0 4px 16px -6px rgb(30 41 82 / 0.10);
+  --shadow-lift: 0 2px 4px rgb(15 23 42 / 0.05), 0 16px 36px -12px rgb(30 41 82 / 0.22);
+  --shadow-pop: 0 24px 64px -16px rgb(15 23 42 / 0.35), 0 4px 12px rgb(15 23 42 / 0.08);
+
+  --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+
+  --animate-fade-in: fade-in 0.2s ease-out;
+  --animate-enter: enter 0.42s var(--ease-out-expo) both;
+  --animate-pop-in: pop-in 0.28s var(--ease-out-expo) both;
+  --animate-sheet-in: sheet-in 0.36s var(--ease-out-expo) both;
+  --animate-toast-in: toast-in 0.42s var(--ease-spring) both;
+  --animate-shimmer: shimmer 1.6s linear infinite;
+  --animate-drawer-in: drawer-in 0.36s var(--ease-out-expo) both;
+  --animate-slide-up: slide-up 0.25s ease-out;
+  --animate-page-in: page-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+  --animate-card-in: card-in 0.55s cubic-bezier(0.22, 1, 0.36, 1) both;
+
+  @keyframes fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @keyframes slide-up {
+    from { opacity: 0; transform: translateY(8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  @keyframes page-in {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes enter {
+    from { opacity: 0; transform: translateY(8px); filter: blur(4px); }
+    to { opacity: 1; transform: none; filter: none; }
+  }
+  @keyframes pop-in {
+    from { opacity: 0; transform: translateY(6px) scale(0.97); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes sheet-in {
+    from { opacity: 0; transform: translateY(24px); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes toast-in {
+    from { opacity: 0; transform: translateY(12px) scale(0.96); }
+    to { opacity: 1; transform: none; }
+  }
+  @keyframes drawer-in {
+    from { transform: translateX(-100%); }
+    to { transform: none; }
+  }
+  @keyframes shimmer {
+    from { background-position: 200% 0; }
+    to { background-position: -200% 0; }
+  }
+  @keyframes card-in {
+    from { opacity: 0; transform: translateY(16px) scale(0.98); }
+    to { opacity: 1; transform: none; }
+  }
+}
+
+/* Quem pede menos movimento no sistema operacional não vê animações nem transições (WCAG 2.3.3). */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+}
+/* durante a troca de tema nada anima (evita a tela "piscar" em degradê) */
+.sem-transicao *, .sem-transicao *::before, .sem-transicao *::after { transition: none !important; }
+
+/* Entrada em sequência: os filhos aparecem um depois do outro (até 12, depois todos juntos). */
+.stagger > * { animation: enter 0.5s var(--ease-out-expo) both; }
+.stagger > :nth-child(2) { animation-delay: 40ms; }
+.stagger > :nth-child(3) { animation-delay: 80ms; }
+.stagger > :nth-child(4) { animation-delay: 120ms; }
+.stagger > :nth-child(5) { animation-delay: 160ms; }
+.stagger > :nth-child(6) { animation-delay: 200ms; }
+.stagger > :nth-child(7) { animation-delay: 240ms; }
+.stagger > :nth-child(8) { animation-delay: 280ms; }
+.stagger > :nth-child(n + 9) { animation-delay: 320ms; }
+
+/* Esqueleto de carregamento: brilho que passa sobre o bloco */
+.skeleton {
+  border-radius: 0.5rem;
+  background: linear-gradient(90deg, rgb(148 163 184 / 0.16) 0%, rgb(148 163 184 / 0.30) 40%, rgb(148 163 184 / 0.16) 80%);
+  background-size: 200% 100%;
+  animation: var(--animate-shimmer);
+}
+
+/* Luz que acompanha o cursor em superfícies de destaque (data-spotlight; posição em --mx/--my, ver components/ui/spotlight.ts) */
+[data-spotlight] { position: relative; isolation: isolate; }
+[data-spotlight]::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  border-radius: inherit;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+  background: radial-gradient(420px circle at var(--mx, 50%) var(--my, 50%), color-mix(in oklab, var(--color-brand-400) 16%, transparent), transparent 60%);
+}
+[data-spotlight]:hover::after { opacity: 1; }
+/* borda iluminada para o elemento principal de uma tela */
+.borda-viva {
+  background:
+    linear-gradient(var(--borda-fundo, white), var(--borda-fundo, white)) padding-box,
+    conic-gradient(from var(--giro, 0deg), color-mix(in oklab, var(--color-brand-400) 70%, transparent), transparent 30%, color-mix(in oklab, var(--color-coral-400) 55%, transparent) 50%, transparent 75%, color-mix(in oklab, var(--color-brand-400) 70%, transparent)) border-box;
+  border: 1px solid transparent;
+  animation: giro 8s linear infinite;
+}
+.dark .borda-viva { --borda-fundo: var(--color-slate-900); }
+@property --giro { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
+@keyframes giro { to { --giro: 360deg; } }
+
+@layer base {
+  /* cores das áreas da intranet; o painel (Configurações › Aparência) sobrescreve em tempo real */
+  :root {
+    --ha-header: var(--color-brand-700);
+    --ha-subbar: var(--color-brand-500);
+    --ha-subbar-fg: var(--color-brand-900);
+    --ha-footer: var(--color-brand-700);
+    --ha-sidebar: var(--color-brand-900);
+    --ha-page: #f1f5f9;
+    --ha-hl-orange: var(--color-amber-brand);
+    --ha-hl-red: var(--color-coral-500);
+  }
+  html {
+    -webkit-font-smoothing: antialiased;
+    color-scheme: light;
+  }
+  html.dark {
+    color-scheme: dark;
+  }
+  body {
+    @apply bg-[var(--ha-page)] text-slate-800 dark:bg-slate-950 dark:text-slate-100;
+  }
+  :focus-visible {
+    @apply outline-2 outline-offset-2 outline-brand-500;
+  }
+}
+
+/* conteúdo das páginas editadas no painel */
+.prose-ha h1 { @apply text-3xl font-bold mt-6 mb-3; }
+.prose-ha h2 { @apply text-2xl font-semibold mt-6 mb-3; }
+.prose-ha h3 { @apply text-xl font-semibold mt-5 mb-2; }
+.prose-ha p { @apply my-3 leading-relaxed; }
+.prose-ha ul { @apply list-disc pl-6 my-3; }
+.prose-ha ol { @apply list-decimal pl-6 my-3; }
+.prose-ha a { @apply text-brand-600 underline dark:text-brand-300; }
+.prose-ha img { @apply rounded-xl my-4 max-w-full; }
+.prose-ha blockquote { @apply border-l-4 border-brand-300 pl-4 italic text-slate-600 dark:text-slate-300; }
+.prose-ha table { @apply w-full border-collapse my-4 text-sm; }
+.prose-ha th, .prose-ha td { @apply border border-slate-300 dark:border-slate-700 px-3 py-2; }
+.prose-ha iframe { @apply w-full aspect-video rounded-xl my-4; }
+
+.scrollbar-thin { scrollbar-width: thin; }
+
+@media print {
+  .no-print { display: none !important; }
+  @page { size: A4; margin: 12mm; }
+  html, body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+
+/* Tabelas sem rolagem lateral (Table em components/ui): no celular, ou quando as colunas não cabem, cada linha vira um cartão. */
+@media (max-width: 639.98px) {
+  .tabela-resp { min-width: 0 !important; }
+  .tabela-resp thead { display: none; }
+  .tabela-resp, .tabela-resp tbody, .tabela-resp tr, .tabela-resp td { display: block; width: 100%; }
+  .tabela-resp tr { padding: 0.5rem 0; }
+  .tabela-resp td { padding: 0.3rem 1rem !important; white-space: normal !important; text-align: left !important; overflow-wrap: anywhere; }
+  .tabela-resp td:empty { display: none; }
+  .tabela-resp td [class*='whitespace-nowrap'] { white-space: normal !important; overflow-wrap: anywhere; }
+  .tabela-resp td[data-label]:not([data-label=''])::before { content: attr(data-label); font-size: 0.68rem; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase; color: rgb(100 116 139); }
+  .tabela-resp td[data-label]:not([data-label='']):not(.cel-dia) { position: relative; padding-left: max(7rem, 36%) !important; min-height: 1.6rem; }
+}
+.tabela-resp.cartoes { display: block; min-width: 0 !important; width: 100% !important; }
+.tabela-resp.cartoes thead { display: none; }
+.tabela-resp.cartoes tbody { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 22rem), 1fr)); }
+.tabela-resp.cartoes tr { display: block; padding: 0.5rem 0; min-width: 0; }
+/* nos cartões, texto marcado para não quebrar (nome, setor) quebra dentro do cartão em vez de passar da borda */
+.tabela-resp.cartoes td [class*='whitespace-nowrap'] { white-space: normal !important; overflow-wrap: anywhere; }
+.tabela-resp.cartoes td { display: block; padding: 0.3rem 1rem !important; white-space: normal !important; text-align: left !important; overflow-wrap: anywhere; }
+.tabela-resp.cartoes td:empty { display: none; }
+.tabela-resp.cartoes td[data-label]:not([data-label=''])::before { content: attr(data-label); font-size: 0.68rem; font-weight: 600; letter-spacing: 0.03em; text-transform: uppercase; color: rgb(100 116 139); }
+.tabela-resp.cartoes td[data-label]:not([data-label='']):not(.cel-dia) { position: relative; padding-left: max(7rem, 36%) !important; min-height: 1.6rem; }
+/* Grade da escala em cartões: os dias ficam lado a lado, quebrando linha, em vez de um embaixo do outro. */
+.tabela-resp.cartoes td.cel-dia { display: inline-block; width: 2.6rem !important; min-width: 0; padding: 0.15rem !important; text-align: center !important; }
+.tabela-resp.cartoes td.cel-dia::before { display: block; text-align: center; }
+@media (max-width: 639.98px) {
+  .tabela-resp td.cel-dia { display: inline-block; width: 2.6rem !important; min-width: 0; padding: 0.15rem !important; text-align: center !important; }
+  .tabela-resp td.cel-dia::before { display: block; text-align: center; }
+}
+
+/* Itens de grade não esticam a página: conteúdo largo (tabela, texto longo) se ajusta à coluna em vez de criar rolagem lateral. */
+:where(.grid) > * { min-width: 0; }
+
+/* rótulo da coluna à esquerda do valor, no cartão */
+@media (max-width: 639.98px) {
+  .tabela-resp td[data-label]:not([data-label='']):not(.cel-dia)::before { position: absolute; left: 1rem; top: 0.45rem; width: calc(max(7rem, 36%) - 1.75rem); overflow-wrap: anywhere; }
+}
+.tabela-resp.cartoes td[data-label]:not([data-label='']):not(.cel-dia)::before { position: absolute; left: 1rem; top: 0.45rem; width: calc(max(7rem, 36%) - 1.75rem); overflow-wrap: anywhere; }
+@keyframes toast-tempo { from { transform: scaleX(1); } to { transform: scaleX(0); } }
+
+/* Paleta dos gráficos (Recharts): tirada da marca e do tema, valendo para claro e escuro.
+   Uso: fill="var(--chart-1)", stroke="var(--chart-grid)"; tooltip com as classes abaixo. */
+:root {
+  --chart-1: var(--color-brand-600);
+  --chart-2: var(--color-coral-500, #f2603f);
+  --chart-3: #0d9488;
+  --chart-4: #d97706;
+  --chart-5: #7c3aed;
+  --chart-6: #0284c7;
+  --chart-7: #db2777;
+  --chart-8: #64748b;
+  --chart-bom: #059669;
+  --chart-neutro: #d97706;
+  --chart-ruim: #e11d48;
+  --chart-meta: var(--color-coral-500, #f2603f);
+  --chart-grid: #e2e8f0;
+  --chart-eixo: #64748b;
+  --chart-ref: #94a3b8;
+  --chart-cursor: rgb(148 163 184 / 0.14);
+  --chart-tip-bg: #ffffff;
+  --chart-tip-borda: #e2e8f0;
+  --chart-tip-texto: #0f172a;
+}
+.dark {
+  --chart-1: var(--color-brand-300);
+  --chart-2: #fb8a6e;
+  --chart-3: #2dd4bf;
+  --chart-4: #fbbf24;
+  --chart-5: #a78bfa;
+  --chart-6: #38bdf8;
+  --chart-7: #f472b6;
+  --chart-8: #94a3b8;
+  --chart-bom: #34d399;
+  --chart-neutro: #fbbf24;
+  --chart-ruim: #fb7185;
+  --chart-meta: #fb8a6e;
+  --chart-grid: #1e293b;
+  --chart-eixo: #94a3b8;
+  --chart-ref: #64748b;
+  --chart-cursor: rgb(148 163 184 / 0.1);
+  --chart-tip-bg: #0f172a;
+  --chart-tip-borda: #334155;
+  --chart-tip-texto: #f1f5f9;
+}
+.recharts-cartesian-axis-tick-value { fill: var(--chart-eixo); }
+.recharts-legend-item-text { color: var(--chart-eixo) !important; }
+.recharts-default-tooltip {
+  background: var(--chart-tip-bg) !important;
+  border: 1px solid var(--chart-tip-borda) !important;
+  border-radius: 0.75rem;
+  box-shadow: var(--shadow-pop);
+  color: var(--chart-tip-texto);
+  font-size: 12px;
+}
+.recharts-tooltip-label { color: var(--chart-tip-texto); font-weight: 600; }
+
+/* Estilo escolhido em Painel › Configurações › Aparência (atributos postos por lib/branding.tsx). */
+html[data-fonte='sistema'] { --font-sans: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; }
+html[data-densidade='compacta'] :is(.tabela-resp, table:not([data-fixa])) :is(td, th) { padding-top: 0.375rem; padding-bottom: 0.375rem; }
+html[data-cantos='retos'] { --radius-md: 0.25rem; --radius-lg: 0.3125rem; --radius-xl: 0.375rem; --radius-2xl: 0.5rem; --radius-3xl: 0.75rem; }
+html[data-cantos='arredondados'] { --radius-md: 0.5rem; --radius-lg: 0.75rem; --radius-xl: 1rem; --radius-2xl: 1.375rem; --radius-3xl: 1.75rem; }
+html[data-animacoes='desligadas'] *, html[data-animacoes='desligadas'] *::before, html[data-animacoes='desligadas'] *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+html[data-animacoes='desligadas'] [data-spotlight]::after { display: none; }
+/* impressão sempre com a paleta clara dos gráficos */
+@media print {
+  .dark {
+    --chart-1: var(--color-brand-600); --chart-2: #f2603f; --chart-3: #0d9488; --chart-4: #d97706; --chart-5: #7c3aed; --chart-6: #0284c7; --chart-7: #db2777; --chart-8: #64748b;
+    --chart-bom: #059669; --chart-neutro: #d97706; --chart-ruim: #e11d48; --chart-meta: #f2603f;
+    --chart-grid: #e2e8f0; --chart-eixo: #64748b; --chart-ref: #94a3b8; --chart-tip-bg: #fff; --chart-tip-borda: #e2e8f0; --chart-tip-texto: #0f172a;
+  }
+}
+/* largura padrão dos campos numa camada abaixo das utilidades: um w-28 passado no className sempre vence */
+@layer components { .campo { width: 100%; } }
+
+/* Larguras máximas (Painel › Configurações › Aparência › Larguras; lib/branding.tsx sobrescreve). none = tela inteira. */
+:root { --largura-pagina: 80rem; --largura-topo: 80rem; --largura-painel: none; }
+
+/* campo apontado pelo pop-up de erros: borda vermelha até a pessoa corrigir */
+.campo-com-erro {
+  border-color: rgb(225 29 72) !important;
+  box-shadow: 0 0 0 3px rgb(225 29 72 / 0.2) !important;
+}

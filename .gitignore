@@ -1,0 +1,15 @@
+node_modules
+dist
+.next
+.env
+apps/api/.env
+apps/api/uploads
+backups
+*.log
+*.tsbuildinfo
+.instalado
+deploy/manutencao/ATIVA
+deploy/manutencao/progresso.json
+deploy/manutencao/progresso.json.tmp
+.duracao-compilacao
+.duracao-atualizacoes

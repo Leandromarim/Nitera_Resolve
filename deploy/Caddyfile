@@ -1,0 +1,97 @@
+# Tela de manutenção, usada abaixo (página em deploy/manutencao/index.html)
+(manutencao) {
+	header Retry-After 30
+	header Cache-Control no-store
+	# as páginas do sistema já abertas veem este cabeçalho e recarregam, caindo nesta tela
+	header X-Resolve-Manutencao 1
+	handle /api/* {
+		header Content-Type "application/json; charset=utf-8"
+		respond `{"message":"O sistema está em manutenção. Tente de novo em instantes."}` 503
+	}
+	# logos padrão da tela (deploy/manutencao/arquivos)
+	handle_path /manutencao-arquivos/* {
+		root * /srv/manutencao/arquivos
+		file_server
+	}
+	# andamento da atualização, gravado pelo instalador (deploy/instalar.sh)
+	handle /manutencao-progresso.json {
+		root * /srv/manutencao
+		rewrite * /progresso.json
+		file_server
+	}
+	handle {
+		root * /srv/manutencao
+		rewrite * /index.html
+		file_server {
+			status 503
+		}
+	}
+}
+
+# HTTPS automático (Let's Encrypt) quando o domínio é público.
+# Para uso só na rede interna, troque a primeira linha por:  {$SITE_ADDRESS} { tls internal
+{$SITE_ADDRESS} {
+	# Compressão HTTP só aqui (o Next.js e a API não comprimem): zstd para navegadores atuais, gzip para os demais.
+	# O Caddy só comprime tipos de texto (HTML, CSS, JS, JSON, SVG); fotos, PDFs, vídeos e Office já são compactados.
+	# Brotli não vem no Caddy padrão; o zstd tem taxa parecida com menos CPU.
+	encode {
+		zstd
+		gzip 5
+		minimum_length 1024
+	}
+
+	# Tela de manutenção (deploy/manutencao): aparece quando o instalador cria o arquivo ATIVA durante a
+	# atualização, e também sempre que o sistema estiver fora do ar ou reiniciando (erro 502/503/504).
+	@manutencao file {
+		root /srv/manutencao
+		try_files ATIVA
+	}
+	handle @manutencao {
+		import manutencao
+	}
+
+	# As páginas abertas perguntam aqui, a cada poucos segundos, se a manutenção começou: 204 fora da
+	# manutenção (respondido pelo próprio Caddy, sem tocar no sistema) e 503 com a tela durante ela.
+	handle /manutencao-status {
+		header Cache-Control no-store
+		respond 204
+	}
+
+	handle {
+		# limite de tamanho de upload (o app também valida: MAX_UPLOAD_MB no .env)
+		@api path /api/*
+		handle @api {
+			request_body {
+				max_size 30MB
+			}
+			reverse_proxy api:4000
+		}
+
+		handle {
+			request_body {
+				max_size 30MB
+			}
+			reverse_proxy web:3000
+		}
+	}
+
+	# Dentro de handle_errors a tela precisa ficar num handle próprio: sem ele, o Caddy não aplica o
+	# rewrite para index.html e a pessoa recebia uma página em branco (502) com o sistema reiniciando.
+	handle_errors 502 503 504 {
+		handle {
+			import manutencao
+		}
+	}
+
+	header {
+		-Server
+		Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+	}
+
+	log {
+		output file /data/access.log {
+			roll_size 50MiB
+			roll_keep 10
+		}
+	}
+}

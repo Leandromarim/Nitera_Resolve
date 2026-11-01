@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>NITERA Resolve em manutenção</title>
+<style>
+  :root { color-scheme: light dark; --bg: #eef2f8; --card: #fff; --text: #1e2a4a; --brand: #3d4a7a; --accent: #f26a3d; }
+  @media (prefers-color-scheme: dark) { :root:not([data-claro]) { --bg: #0f1424; --card: #1a2138; --text: #e7ebf5; --brand: #8f9ce0; } }
+  :root[data-claro] { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 24px 16px; background: var(--bg); color: var(--text);
+    font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  main { width: 100%; max-width: 520px; background: var(--card); border-radius: 20px; padding: 40px 32px; text-align: center;
+    box-shadow: 0 20px 50px -20px rgba(30, 42, 74, .35); border-top: 6px solid var(--accent); }
+  main.carregando { visibility: hidden; }
+  .logo { display: block; margin: 0 auto 12px; max-width: 260px; max-height: 72px; width: auto; height: auto; }
+  .logo-escuro { display: none; }
+  @media (prefers-color-scheme: dark) { :root:not([data-claro]) .logo-claro { display: none; } :root:not([data-claro]) .logo-escuro { display: block; } }
+  .icone { width: 72px; height: 72px; margin: 24px auto 16px; border-radius: 50%; display: grid; place-items: center;
+    background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
+  .icone svg { width: 36px; height: 36px; animation: gira 3s linear infinite; }
+  @keyframes gira { to { transform: rotate(360deg); } }
+  @media (prefers-reduced-motion: reduce) { .icone svg { animation: none; } }
+  h1 { margin: 0 0 8px; font-size: 26px; line-height: 1.25; }
+  p { margin: 0 0 12px; color: color-mix(in srgb, var(--text) 72%, transparent); }
+  .status { margin-top: 24px; font-size: 14px; color: color-mix(in srgb, var(--text) 72%, transparent); display: inline-flex; align-items: center; gap: 8px; }
+  .ponto { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: pisca 1.2s ease-in-out infinite; }
+  @keyframes pisca { 50% { opacity: .25; } }
+  .progresso { margin-top: 24px; text-align: left; }
+  .progresso-topo { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+  .progresso-topo span:last-child { font-variant-numeric: tabular-nums; color: var(--accent); transition: color 1s ease; }
+  .trilho { height: 10px; border-radius: 999px; background: color-mix(in srgb, var(--text) 12%, transparent); overflow: hidden; }
+  .barra { height: 100%; width: 0; border-radius: inherit; background: var(--accent); transition: width 1s ease, background-color 1s ease;
+    background-image: linear-gradient(45deg, rgba(255,255,255,.22) 25%, transparent 25%, transparent 50%, rgba(255,255,255,.22) 50%, rgba(255,255,255,.22) 75%, transparent 75%);
+    background-size: 20px 20px; animation: listras 1s linear infinite; }
+  @keyframes listras { to { background-position: 20px 0; } }
+  @media (prefers-reduced-motion: reduce) { .barra { animation: none; transition: none; } }
+  .progresso small { display: block; margin-top: 6px; font-size: 12px; color: color-mix(in srgb, var(--text) 60%, transparent); }
+  footer { margin-top: 28px; font-size: 13px; color: color-mix(in srgb, var(--text) 72%, transparent); }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<main class="carregando">
+  <div id="logos">
+    <img class="logo logo-claro" src="/manutencao-arquivos/logo.png" alt="NITERA Resolve">
+    <img class="logo logo-escuro" src="/manutencao-arquivos/logo-branco.png" alt="NITERA Resolve">
+  </div>
+  <div class="icone" id="icone" aria-hidden="true">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/>
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/>
+    </svg>
+  </div>
+  <h1 id="titulo">Sistema em manutenção</h1>
+  <div id="mensagem">
+    <p>Estamos atualizando o NITERA Resolve para trazer melhorias. Isso costuma levar poucos minutos.</p>
+    <p>Esta página recarrega sozinha quando o sistema voltar. Não é preciso fazer nada.</p>
+  </div>
+  <div class="progresso" id="progresso" hidden>
+    <div class="progresso-topo"><span id="etapa">Atualizando</span><span id="pct">0%</span></div>
+    <div class="trilho" role="progressbar" aria-label="Andamento da atualização" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0" id="trilho"><div class="barra" id="barra"></div></div>
+    <small id="passo"></small>
+  </div>
+  <div class="status" id="status" role="status"><span class="ponto"></span> <span id="msg">Verificando…</span></div>
+  <footer id="rodape">Em caso de urgência, fale com o suporte de TI da instituição.</footer>
+</main>
+<script>
+  var $ = function (id) { return document.getElementById(id); };
+  var segundos = 15;
+
+  // tenta de novo a cada N s; quando o sistema responder, volta para a página que a pessoa estava
+  var msg = $('msg');
+  function tentar() {
+    msg.textContent = 'Verificando…';
+    fetch('/api/health', { cache: 'no-store' })
+      .then(function (r) { if (r.ok) location.reload(); else espera(); })
+      .catch(espera);
+  }
+  function espera() {
+    var n = segundos;
+    msg.textContent = 'Nova tentativa em ' + n + ' s';
+    var t = setInterval(function () {
+      n -= 1;
+      if (n <= 0) { clearInterval(t); tentar(); } else msg.textContent = 'Nova tentativa em ' + n + ' s';
+    }, 1000);
+  }
+
+  // barra de progresso: o instalador grava em que etapa está (/manutencao-progresso.json). Dentro da etapa,
+  // o avanço é estimado pelo tempo que a mesma etapa levou da última vez (nunca passa do fim da etapa).
+  var maior = 0;
+  function progresso() {
+    fetch('/manutencao-progresso.json', { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (p) {
+        if (!p || typeof p.de !== 'number' || typeof p.ate !== 'number') { $('progresso').hidden = true; return; }
+        var pct = p.de;
+        var inicio = Date.parse(p.inicio);
+        if (p.estimativa > 0 && !isNaN(inicio)) {
+          var fracao = Math.min(Math.max((Date.now() - inicio) / 1000 / p.estimativa, 0), 0.95);
+          pct = p.de + (p.ate - p.de) * fracao;
+        }
+        pct = Math.max(maior, Math.min(100, Math.round(pct)));
+        maior = pct;
+        $('progresso').hidden = false;
+        $('etapa').textContent = String(p.texto || 'Atualizando').slice(0, 80);
+        $('pct').textContent = pct + '%';
+        $('barra').style.width = pct + '%';
+        // cor pela porcentagem: 0% vermelho, 50% amarelo, 100% verde (o número acompanha a barra)
+        var cor = 'hsl(' + Math.round(pct * 1.2) + ', 85%, 48%)';
+        $('barra').style.backgroundColor = cor;
+        $('pct').style.color = cor;
+        $('trilho').setAttribute('aria-valuenow', String(pct));
+        $('passo').textContent = p.etapa && p.total ? 'Etapa ' + p.etapa + ' de ' + p.total + (p.estimativa > 0 && pct < p.ate ? ' · tempo estimado pela última atualização' : '') : '';
+      })
+      .catch(function () { $('progresso').hidden = true; });
+  }
+  progresso();
+  setInterval(progresso, 3000);
+
+  document.querySelector('main').classList.remove('carregando');
+  espera();
+</script>
+</body>
+</html>

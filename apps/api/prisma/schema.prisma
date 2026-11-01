@@ -1,0 +1,514 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─────────────────────────── Usuários e segurança ───────────────────────────
+
+enum Role {
+  ADMIN
+  TI // técnico de TI: atende essa fila de chamados
+  INFRAESTRUTURA // técnico da Infraestrutura de TI
+  MANUTENCAO // técnico da Manutenção
+  COMUNICACAO // equipe da Comunicação
+  GESTOR_AREA // gestor da área: acompanha, só para leitura, as equipes marcadas em Categorias e SLA › Setores
+  COLABORADOR // abre e acompanha os próprios chamados
+}
+
+model Department {
+  id                String             @id @default(uuid())
+  name              String             @unique
+  /// local do setor (ex.: Subsolo, 2º andar): já vem preenchido no chamado
+  location          String?
+  users             User[]
+  tickets           Ticket[]
+  createdAt         DateTime           @default(now())
+}
+
+model User {
+  id                 String               @id @default(uuid())
+  name               String
+  email              String               @unique
+  username           String               @unique
+  phone              String?
+  extension          String? // ramal
+  jobTitle           String?
+  avatarUrl          String?
+  passwordHash       String
+  roles              Role[]               @default([COLABORADOR])
+  active             Boolean              @default(true)
+  mustChangePassword Boolean              @default(false)
+  /// senha inicial simples definida pela TI: só serve para entrar e trocar por uma senha forte, e vence em `senhaProvisoriaAte`
+  senhaProvisoria    Boolean              @default(false)
+  senhaProvisoriaAte DateTime?
+  totpSecret         String?
+  totpEnabled        Boolean              @default(false)
+  failedLogins       Int                  @default(0)
+  lockedUntil        DateTime?
+  lastLoginAt        DateTime?
+  lastSeenAt         DateTime?
+  departmentId       String?
+  department         Department?          @relation(fields: [departmentId], references: [id])
+  refreshTokens      RefreshToken[]
+  auditLogs          AuditLog[]
+  ticketsRequested   Ticket[]             @relation("requester")
+  ticketsAssigned    Ticket[]             @relation("assignee")
+  ticketComments     TicketComment[]
+  releaseViews       ReleaseView[]
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  passwordResets     PasswordReset[]
+  /// cadastro no estilo GLPI: nome e sobrenome separados (name continua sendo o nome completo)
+  firstName          String?
+  lastName           String?
+  /// depois desta data a conta não entra mais (null = sem validade)
+  validUntil         DateTime?
+  /// perfil de uso: define as permissões (roles é copiado do perfil)
+  profileId          String?
+  profile            AccessProfile?       @relation(fields: [profileId], references: [id], onDelete: Restrict)
+  categoryId         String?
+  category           UserCategory?        @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+  groups             OrgGroup[]           @relation("UserGroups")
+  /// e-mail que recebe os avisos dos chamados (vazio = o e-mail do cadastro)
+  ticketEmail        String?
+  /// recebe os avisos dos chamados por e-mail
+  ticketEmailOn      Boolean              @default(true)
+}
+
+/// Perfil de uso do sistema (ex.: Técnico TI, Usuário padrão): cada um com as suas permissões.
+model AccessProfile {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  roles       Role[]
+  /// sugerido no cadastro de usuário novo
+  isDefault   Boolean  @default(false)
+  users       User[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+/// Categoria do usuário (ex.: Assistencial, Administrativo, Terceirizado).
+model UserCategory {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  users       User[]
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+/// Grupo da organização (ex.: TI, Recepção de Consultas); um usuário pode estar em vários.
+model OrgGroup {
+  id          String   @id @default(uuid())
+  name        String   @unique
+  description String?
+  /// e-mail do grupo (ex.: ti@...), só informativo
+  email       String?
+  users       User[]   @relation("UserGroups")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model RefreshToken {
+  id         String    @id @default(uuid())
+  userId     String
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  family     String
+  tokenHash  String    @unique
+  expiresAt  DateTime
+  revokedAt  DateTime?
+  replacedBy String?
+  userAgent  String?
+  ip         String?
+  createdAt  DateTime  @default(now())
+
+  @@index([family])
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  user      User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+  action    String
+  entity    String
+  entityId  String?
+  data      Json?
+  ip        String?
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+  @@index([entity, entityId])
+}
+
+// ─────────────────────────── Conteúdo do portal ───────────────────────────
+
+model FileAsset {
+  id           String         @id @default(uuid())
+  originalName String
+  storedName   String         @unique
+  mimeType     String
+  size         Int
+  public       Boolean        @default(true)
+  uploadedById String?
+  createdAt    DateTime       @default(now())
+  // Armazenamento e otimização (4.8.0). Linhas antigas ficam com status nulo até a análise em segundo plano.
+  /// SHA-256 do arquivo guardado (integridade e duplicidade)
+  sha256       String?
+  /// tamanho recebido no envio, antes de qualquer otimização
+  originalSize Int?
+  /// de onde veio: PORTAL (conteúdo público do painel), UPLOAD (envio privado), GED, FORMULARIO, CHAMADO, SISTEMA
+  origin       String?
+  optStatus    FileOptStatus?
+  optNote      String?
+  optAt        DateTime?
+  /// arquivo idêntico já guardado com que este divide o espaço em disco (link físico)
+  dedupOfId    String?
+  optLogs      FileOptLog[]
+  // Áudio (4.45.0): duração e forma de onda calculadas no servidor; cópia M4A para aparelhos que não tocam WebM/Ogg
+  /// duração em milissegundos (-1 = não foi possível analisar)
+  mediaMs      Int?
+  /// 48 alturas de 0 a 100 separadas por vírgula (forma de onda do player)
+  mediaPeaks   String?
+  /// nome do arquivo M4A gerado ao lado do original (mesma pasta de envios)
+  mediaAlt     String?
+
+  @@index([sha256])
+  @@index([optStatus])
+}
+
+enum FileOptStatus {
+  PENDENTE
+  OTIMIZADO
+  MANTIDO
+  IGNORADO
+  PROTEGIDO
+  ERRO
+}
+
+/// Histórico do processamento de cada arquivo (Painel › Armazenamento e otimização).
+model FileOptLog {
+  id          String    @id @default(uuid())
+  fileId      String
+  file        FileAsset @relation(fields: [fileId], references: [id], onDelete: Cascade)
+  action      String
+  ok          Boolean   @default(true)
+  bytesBefore Int?
+  bytesAfter  Int?
+  detail      String?
+  ms          Int?
+  createdAt   DateTime  @default(now())
+
+  @@index([createdAt])
+  @@index([fileId])
+}
+
+model Setting {
+  key       String   @id
+  value     Json
+  updatedAt DateTime @updatedAt
+}
+
+// ─────────────────────────── Chat ───────────────────────────
+
+enum TicketStatus {
+  NOVO
+  EM_ATENDIMENTO
+  AGUARDANDO_USUARIO
+  RESOLVIDO
+  FECHADO
+  CANCELADO
+}
+
+enum TicketPriority {
+  BAIXA
+  MEDIA
+  ALTA
+  CRITICA
+}
+
+enum TicketChannel {
+  PORTAL
+  WHATSAPP
+  EMAIL
+  TELEFONE
+}
+
+/// setor que atende o chamado (cada um tem a própria fila, técnicos e painel da TV)
+enum TicketSector {
+  TI
+  INFRAESTRUTURA // Infraestrutura de TI: redes, servidores, cabeamento, telefonia
+  MANUTENCAO
+  COMUNICACAO
+}
+
+model TicketCategory {
+  id          String       @id @default(uuid())
+  name        String       @unique
+  sector      TicketSector @default(TI)
+  description String?
+  slaHours    Int          @default(24)
+  active      Boolean      @default(true)
+  tickets     Ticket[]
+}
+
+model Ticket {
+  id                 String               @id @default(uuid())
+  number             Int                  @unique @default(autoincrement())
+  title              String
+  description        String
+  sector             TicketSector         @default(TI)
+  status             TicketStatus         @default(NOVO)
+  priority           TicketPriority       @default(MEDIA)
+  channel            TicketChannel        @default(PORTAL)
+  categoryId         String?
+  category           TicketCategory?      @relation(fields: [categoryId], references: [id])
+  departmentId       String?
+  department         Department?          @relation(fields: [departmentId], references: [id])
+  location           String?
+  requesterId        String?
+  requester          User?                @relation("requester", fields: [requesterId], references: [id], onDelete: SetNull)
+  requesterName      String?
+  requesterEmail     String?
+  requesterPhone     String?
+  /// ramal informado na abertura (padrão: o do cadastro de quem pediu)
+  requesterExtension String?
+  assigneeId         String?
+  assignee           User?                @relation("assignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  dueAt              DateTime?
+  /// horas somadas ao prazo pelas prorrogações (continuam valendo quando a prioridade ou a categoria muda)
+  prorrogadoHoras    Int                  @default(0)
+  prorrogacoes       TicketProrrogacao[]
+  firstResponseAt    DateTime?
+  resolvedAt         DateTime?
+  closedAt           DateTime?
+  rating             Int?
+  ratingComment      String?
+  comments           TicketComment[]
+  events             TicketEvent[]
+  /// vínculos com a Central de Planejamento (o Planejamento nunca altera status, prioridade ou SLA do chamado)
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+
+  @@index([status])
+  @@index([sector, status])
+  @@index([createdAt])
+  @@index([requesterPhone])
+}
+
+model TicketComment {
+  id         String        @id @default(uuid())
+  ticketId   String
+  ticket     Ticket        @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  authorId   String?
+  author     User?         @relation(fields: [authorId], references: [id], onDelete: SetNull)
+  authorName String?
+  body       String
+  internal   Boolean       @default(false)
+  channel    TicketChannel @default(PORTAL)
+  fileId     String?
+  fileName   String?
+  createdAt  DateTime      @default(now())
+}
+
+/// Prorrogação do prazo feita pela equipe, com justificativa e evidências (fotos, documentos); visível só para a equipe.
+model TicketProrrogacao {
+  id            String    @id @default(uuid())
+  ticketId      String
+  ticket        Ticket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  authorId      String?
+  authorName    String
+  horas         Int
+  prazoAnterior DateTime?
+  prazoNovo     DateTime
+  justificativa String
+  /// [{ id, name }] dos arquivos enviados como evidência
+  arquivos      Json      @default("[]")
+  createdAt     DateTime  @default(now())
+
+  @@index([ticketId])
+}
+
+model TicketEvent {
+  id        String   @id @default(uuid())
+  ticketId  String
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+  actorId   String?
+  type      String
+  from      String?
+  to        String?
+  createdAt DateTime @default(now())
+}
+
+model InboundMessage {
+  id        String        @id // id externo (wamid ou Message-ID) para idempotência
+  channel   TicketChannel
+  createdAt DateTime      @default(now())
+}
+
+/// Chamado do WhatsApp esperando a pessoa escolher a área e a categoria nos menus (um por telefone; vence em pouco tempo).
+model WhatsappPendente {
+  phone            String        @id
+  name             String?
+  description      String
+  /// anexos já recebidos: [{ id, name }]
+  files            Json          @default("[]")
+  /// vazio = escolhendo a área; preenchido = área final (já com o encaminhamento automático), escolhendo a categoria
+  sector           TicketSector?
+  /// área que a pessoa escolheu (difere de `sector` quando houve encaminhamento automático)
+  escolhida        TicketSector?
+  /// palavra que causou o encaminhamento automático
+  palavra          String?
+  /// página da lista de categorias
+  page             Int           @default(0)
+  /// categoria escolhida quando a descrição ainda vai ser pedida (conversa que começou com "oi")
+  categoryId       String?
+  /// já escolheu área e categoria e falta descrever o problema
+  aguardaDescricao Boolean       @default(false)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+}
+
+// ─────────────────────────── Ouvidoria ───────────────────────────
+
+/// Setor/ala de internação onde ficam os leitos (não confundir com Department, que são os setores administrativos dos usuários).
+model Revision {
+  id        String   @id @default(uuid())
+  entity    String // MenuItem | CarouselSlide | Card | Page | Setting | TicketCategory
+  entityId  String
+  version   Int
+  action    String // criar | editar | excluir | restaurar | reordenar
+  label     String // nome legível do item no momento
+  snapshot  Json
+  userId    String?
+  userName  String?
+  createdAt DateTime @default(now())
+
+  @@unique([entity, entityId, version])
+  @@index([createdAt])
+}
+
+/**
+ * Versão completa da intranet (menus, carrossel, cards, páginas e configurações) — um "ponto de restauração".
+ */
+enum NotificationLevel {
+  INFO
+  IMPORTANTE
+  URGENTE
+}
+
+/**
+ * Avisos e notificações. Sem destinatário = todos; userId/departmentId/role restringem o público.
+ */
+model Notification {
+  id            String             @id @default(uuid())
+  title         String
+  body          String?
+  link          String?
+  level         NotificationLevel  @default(INFO)
+  userId        String?
+  departmentId  String?
+  role          Role?
+  system        Boolean            @default(false) // gerada automaticamente (reserva, curso...)
+  startsAt      DateTime           @default(now())
+  endsAt        DateTime?
+  createdById   String?
+  createdByName String?
+  reads         NotificationRead[]
+  createdAt     DateTime           @default(now())
+
+  @@index([userId])
+  @@index([startsAt])
+}
+
+model NotificationRead {
+  notificationId String
+  notification   Notification @relation(fields: [notificationId], references: [id], onDelete: Cascade)
+  userId         String
+  readAt         DateTime     @default(now())
+
+  @@id([notificationId, userId])
+}
+
+// ─────────────────────────── Documentos ───────────────────────────
+
+/**
+ * Formulários (link ou arquivo) agrupados por setor, com QR Code.
+ */
+enum ReleaseKind {
+  NOVIDADE
+  MELHORIA
+  CORRECAO
+  SEGURANCA
+}
+
+/// de qual sistema é a versão: a intranet e o NITERA Qualis têm numeração e histórico próprios
+enum ReleaseSystem {
+  RESOLVE
+}
+
+/// uma atualização da intranet ou do NITERA Qualis, com o número da versão e o que mudou
+model Release {
+  id          String        @id @default(uuid())
+  system      ReleaseSystem @default(RESOLVE)
+  version     String
+  title       String
+  summary     String?
+  published   Boolean       @default(false)
+  publishedAt DateTime?
+  /// mostra a janela "O que há de novo" para quem ainda não viu
+  announce    Boolean       @default(true)
+  items       ReleaseItem[]
+  views       ReleaseView[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
+
+  @@unique([system, version])
+  @@index([system, published, publishedAt])
+}
+
+model ReleaseItem {
+  id          String      @id @default(uuid())
+  releaseId   String
+  release     Release     @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+  kind        ReleaseKind @default(NOVIDADE)
+  title       String
+  description String
+  /// por que mudou (motivo da melhoria, em texto simples)
+  reason      String?
+  imageId     String?
+  order       Int         @default(0)
+
+  @@index([releaseId, order])
+}
+
+model ReleaseView {
+  releaseId String
+  release   Release  @relation(fields: [releaseId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  seenAt    DateTime @default(now())
+
+  @@id([releaseId, userId])
+}
+
+// ─────────────────────────── Gestão de documentos (Qualidade) ───────────────────────────
+
+model PasswordReset {
+  id        String    @id @default(uuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  ip        String?
+  createdAt DateTime  @default(now())
+
+  @@index([userId, createdAt])
+}
+
+/// "Esqueci minha senha" do NITERA Qualis (contas próprias): link de uso único, só o hash do token fica gravado.

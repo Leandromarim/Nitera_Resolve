@@ -1,0 +1,15 @@
+packages:
+  - apps/*
+onlyBuiltDependencies:
+  - argon2
+  - "@prisma/client"
+  - "@prisma/engines"
+  - prisma
+  - sharp
+  - "@nestjs/core"
+overrides:
+  # correções de segurança (4.44.0): versões pedidas pelo pnpm audit, dentro da mesma versão principal
+  multer: 2.5.0
+  body-parser: 2.4.0
+  nodemailer: 10.3.1
+  postcss: 8.5.32
