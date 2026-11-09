@@ -20,6 +20,7 @@ export function RequireAuth({ children, roles, loginPath = '/login' }: { childre
 
   useEffect(() => {
     if (user?.mustChangePassword && pathname !== '/perfil') router.replace(`/perfil?trocar=1&next=${encodeURIComponent(pathname)}`);
+    else if (user?.duasEtapasPendente && pathname !== '/perfil') router.replace(`/perfil?duas-etapas=1&next=${encodeURIComponent(pathname)}`);
   }, [user, pathname, router]);
 
   if (!ready || !user) return <Loading label="Verificando acesso…" />;

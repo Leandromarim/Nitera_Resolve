@@ -71,6 +71,7 @@ export class BootstrapService implements OnApplicationBootstrap {
 
   async rodar() {
     await this.categoriasUsuario();
+    await this.versao101();
     if (await this.prisma.setting.findUnique({ where: { key: MARCA } })) return;
     for (const c of CATEGORIAS) await this.prisma.ticketCategory.upsert({ where: { name: c.name }, update: {}, create: c });
     for (const p of PERFIS) await this.prisma.accessProfile.upsert({ where: { name: p.name }, update: {}, create: { ...p, isDefault: !!p.isDefault } });
@@ -96,6 +97,30 @@ export class BootstrapService implements OnApplicationBootstrap {
     });
     await this.prisma.setting.create({ data: { key: MARCA, value: new Date().toISOString() } });
     this.log.log('Carga inicial concluída: categorias, perfis e primeiro setor criados.');
+  }
+
+  /** Novidades da 1.0.1 (correções de segurança vindas da Intranet 4.55.0): grava uma vez, também em quem já tinha a 1.0.0. */
+  private async versao101() {
+    await this.prisma.release.upsert({
+      where: { system_version: { system: 'RESOLVE', version: '1.0.1' } },
+      update: {},
+      create: {
+        version: '1.0.1',
+        title: 'Correções de segurança',
+        summary: 'Duas etapas obrigatória para Administrador e TI, sessão encerrada de verdade ao sair e proteções no texto dos chamados.',
+        published: true,
+        publishedAt: new Date(),
+        announce: false,
+        items: {
+          create: [
+            { order: 0, kind: 'SEGURANCA', title: 'Duas etapas obrigatória por perfil', description: 'Administrador e TI só usam o sistema depois de ativar o código do celular. Os perfis obrigados ficam em Configurações › Acesso.' },
+            { order: 1, kind: 'SEGURANCA', title: 'Sair encerra a sessão de verdade', description: 'Depois de sair ou trocar a senha, um token antigo não abre mais uma sessão nova, nem nos 60 segundos de tolerância entre abas.' },
+            { order: 2, kind: 'SEGURANCA', title: 'Texto dos chamados sem travar o sistema', description: 'A limpeza de marcações no texto ficou linear: um texto preparado para travar a API não tem mais efeito.' },
+            { order: 3, kind: 'SEGURANCA', title: 'Voltar versão sem apagar o banco', description: 'O comando deploy/voltar-versao.sh devolve o banco de antes da atualização num banco novo e guarda o atual.' },
+          ],
+        },
+      },
+    });
   }
 
   /** Categorias de usuário: uma vez só, e só se ainda não houver nenhuma. */

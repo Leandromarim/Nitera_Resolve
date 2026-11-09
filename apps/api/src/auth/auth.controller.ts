@@ -4,7 +4,7 @@ import type { Request, Response } from 'express';
 import { AuthService } from './auth.service';
 import { ChangePasswordDto, EsqueciSenhaDto, LoginDto, RedefinirSenhaDto, TokenRecuperacaoDto, TotpCodeDto } from './dto';
 import { RecuperarSenhaService } from './recuperar-senha.service';
-import { AuthUser, ClientIp, CurrentUser, Public, SenhaProvisoriaOk } from '../common/decorators';
+import { AuthUser, ClientIp, CurrentUser, DuasEtapasOk, Public, SenhaProvisoriaOk } from '../common/decorators';
 import { PrismaService } from '../prisma/prisma.service';
 import { AcessoService, COOKIE_ARQUIVOS } from '../common/acesso';
 
@@ -101,24 +101,28 @@ export class AuthController {
   }
 
   @SenhaProvisoriaOk()
+  @DuasEtapasOk()
   @Get('me')
   async me(@CurrentUser() u: AuthUser) {
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: u.id } });
-    return this.auth.publicUser(user);
+    return this.auth.publicUser(user, await this.auth.duasEtapasPendente(user));
   }
 
   @SenhaProvisoriaOk()
+  @DuasEtapasOk()
   @Post('change-password')
   @HttpCode(204)
   changePassword(@CurrentUser() u: AuthUser, @Body() dto: ChangePasswordDto, @Req() req: Request) {
     return this.auth.changePassword(u.id, dto.currentPassword, dto.newPassword, req.cookies?.[COOKIE]);
   }
 
+  @DuasEtapasOk()
   @Post('2fa/setup')
   totpSetup(@CurrentUser() u: AuthUser) {
     return this.auth.totpSetup(u.id);
   }
 
+  @DuasEtapasOk()
   @Post('2fa/enable')
   @HttpCode(204)
   totpEnable(@CurrentUser() u: AuthUser, @Body() dto: TotpCodeDto) {

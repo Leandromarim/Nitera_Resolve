@@ -13,3 +13,4 @@ deploy/manutencao/progresso.json
 deploy/manutencao/progresso.json.tmp
 .duracao-compilacao
 .duracao-atualizacoes
+.dump-da-atualizacao

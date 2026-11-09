@@ -89,7 +89,13 @@ export function LoginScreen({
 
   useEffect(() => {
     // senha provisória: primeiro troca a senha, depois segue para onde ia
-    if (ready && user) router.replace(user.mustChangePassword ? `/perfil?trocar=1&next=${encodeURIComponent(next)}` : next);
+    if (ready && user) router.replace(
+        user.mustChangePassword
+          ? `/perfil?trocar=1&next=${encodeURIComponent(next)}`
+          : user.duasEtapasPendente
+            ? `/perfil?duas-etapas=1&next=${encodeURIComponent(next)}`
+            : next,
+      );
   }, [ready, user, router, next]);
 
   const submit = async (e: React.FormEvent) => {

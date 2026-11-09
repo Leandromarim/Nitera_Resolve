@@ -1,4 +1,4 @@
-import { BadRequestException, ForbiddenException, Injectable, UnauthorizedException } from '@nestjs/common';
+import { BadRequestException, ForbiddenException, Injectable, Optional, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { User } from '@prisma/client';
 import * as argon2 from 'argon2';
@@ -8,6 +8,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { nomeDoSite } from '../mensagens/mensagens.service';
 import { AuditService } from '../common/audit.service';
 import { randomToken, sha256 } from '../common/crypto';
+import { AcessoService } from '../common/acesso';
 
 const MAX_FAILED = 5;
 const LOCK_MINUTES = 15;
@@ -38,7 +39,17 @@ export class AuthService {
   // Hash usado quando o usuário não existe, para que o tempo de resposta não revele contas válidas.
   private readonly dummyHash = argon2.hash(randomToken(), ARGON_OPTS);
 
-  constructor(private prisma: PrismaService, private jwt: JwtService, private audit: AuditService) {}
+  constructor(
+    private prisma: PrismaService,
+    private jwt: JwtService,
+    private audit: AuditService,
+    @Optional() private acesso?: AcessoService,
+  ) {}
+
+  /** Perfil obrigado a usar duas etapas (Configurações › Acesso) e ainda sem o autenticador (auditoria AUT-01). */
+  async duasEtapasPendente(user: Pick<User, 'roles' | 'totpEnabled'>): Promise<boolean> {
+    return this.acesso ? this.acesso.duasEtapasPendente({ roles: user.roles, totpEnabled: user.totpEnabled }) : false;
+  }
 
   hashPassword(password: string) {
     return argon2.hash(password, ARGON_OPTS);
@@ -101,20 +112,21 @@ export class AuthService {
   }
 
   private async issueSession(user: User, family: string, remember: boolean, meta: SessionMeta) {
-    const accessToken = await this.signAccess(user, family);
+    const pendente = await this.duasEtapasPendente(user);
+    const accessToken = await this.signAccess(user, family, pendente);
     const raw = randomToken(48);
     const days = remember ? REFRESH_DAYS_LONG : REFRESH_DAYS_SHORT;
     const expiresAt = new Date(Date.now() + days * 86_400_000);
     const rt = await this.prisma.refreshToken.create({
       data: { userId: user.id, family, tokenHash: sha256(raw), expiresAt, ip: meta.ip, userAgent: meta.userAgent?.slice(0, 250) },
     });
-    return { accessToken, refreshToken: raw, refreshExpiresAt: expiresAt, refreshId: rt.id, user: this.publicUser(user), remember };
+    return { accessToken, refreshToken: raw, refreshExpiresAt: expiresAt, refreshId: rt.id, user: this.publicUser(user, pendente), remember };
   }
 
   /** `sid` liga o token à sessão (família de refresh), para o SGQ conferir revogação a cada requisição; `mfa` indica login com segundo fator. */
-  signAccess(user: Pick<User, 'id' | 'name' | 'email' | 'roles' | 'totpEnabled' | 'mustChangePassword' | 'senhaProvisoria'>, family?: string) {
+  signAccess(user: Pick<User, 'id' | 'name' | 'email' | 'roles' | 'totpEnabled' | 'mustChangePassword' | 'senhaProvisoria'>, family?: string, mfaPendente = false) {
     return this.jwt.signAsync(
-      { sub: user.id, name: user.name, email: user.email, roles: user.roles, ...(family ? { sid: family } : {}), mfa: !!user.totpEnabled, ...(user.senhaProvisoria && user.mustChangePassword ? { prov: true } : {}) },
+      { sub: user.id, name: user.name, email: user.email, roles: user.roles, ...(family ? { sid: family } : {}), mfa: !!user.totpEnabled, ...(user.senhaProvisoria && user.mustChangePassword ? { prov: true } : {}), ...(mfaPendente ? { mfap: true } : {}) },
       { secret: process.env.JWT_ACCESS_SECRET, expiresIn: '15m', audience: 'nitera-resolve', issuer: 'nitera-resolve-api', algorithm: 'HS256' },
     );
   }
@@ -125,7 +137,13 @@ export class AuthService {
     const current = await this.prisma.refreshToken.findUnique({ where: { tokenHash: sha256(raw) }, include: { user: true } });
     if (!current) throw new UnauthorizedException();
     // outra aba (ou uma resposta que se perdeu) acabou de trocar este token: não é roubo, só corrida entre abas
-    const corrida = !!current.revokedAt && !!current.replacedBy && Date.now() - current.revokedAt.getTime() < REUSO_TOLERANCIA_MS;
+    let corrida = !!current.revokedAt && !!current.replacedBy && Date.now() - current.revokedAt.getTime() < REUSO_TOLERANCIA_MS;
+    // A tolerância só vale se a sessão ainda está viva: depois de sair, trocar ou redefinir a senha, o token
+    // antigo não pode abrir uma sessão nova, mesmo dentro dos 60 s (auditoria AUT-02).
+    if (corrida && !(await this.sessaoViva(current.replacedBy!))) {
+      await this.audit.log(current.userId, 'sessao.token_antigo_recusado', 'User', current.userId, undefined, meta.ip);
+      throw new UnauthorizedException('Sessão encerrada. Faça login novamente.');
+    }
     if (current.revokedAt && !corrida) {
       await this.prisma.refreshToken.updateMany({ where: { family: current.family, revokedAt: null }, data: { revokedAt: new Date() } });
       await this.audit.log(current.userId, 'sessao.reuso_detectado', 'User', current.userId, undefined, meta.ip);
@@ -137,6 +155,21 @@ export class AuthService {
     const session = await this.issueSession(current.user, current.family, remember, meta);
     if (!corrida) await this.prisma.refreshToken.update({ where: { id: current.id }, data: { revokedAt: new Date(), replacedBy: session.refreshId } });
     return session;
+  }
+
+  /** Segue a corrente de trocas a partir de um token: a sessão está viva se o último da corrente não foi revogado. */
+  private async sessaoViva(id: string): Promise<boolean> {
+    let proximo: string | null = id;
+    for (let i = 0; proximo && i < 20; i++) {
+      const rt: { revokedAt: Date | null; replacedBy: string | null; expiresAt: Date } | null = await this.prisma.refreshToken.findUnique({
+        where: { id: proximo },
+        select: { revokedAt: true, replacedBy: true, expiresAt: true },
+      });
+      if (!rt) return false;
+      if (!rt.revokedAt) return rt.expiresAt > new Date();
+      proximo = rt.replacedBy;
+    }
+    return false;
   }
 
   async logout(raw: string | undefined) {
@@ -177,12 +210,14 @@ export class AuthService {
 
   async totpDisable(userId: string, code: string) {
     const user = await this.prisma.user.findUniqueOrThrow({ where: { id: userId } });
+    if (await this.duasEtapasPendente({ roles: user.roles, totpEnabled: false }))
+      throw new ForbiddenException('Seu perfil exige a verificação em duas etapas. Para trocar de celular, peça à TI para zerar e cadastre de novo.');
     if (!user.totpSecret || !authenticator.check(code, user.totpSecret)) throw new BadRequestException('Código inválido');
     await this.prisma.user.update({ where: { id: userId }, data: { totpEnabled: false, totpSecret: null } });
     await this.audit.log(userId, '2fa.desativado', 'User', userId);
   }
 
-  publicUser(u: User) {
+  publicUser(u: User, duasEtapasPendente = false) {
     return {
       id: u.id,
       name: u.name,
@@ -195,6 +230,7 @@ export class AuthService {
       departmentId: u.departmentId,
       totpEnabled: u.totpEnabled,
       mustChangePassword: u.mustChangePassword,
+      duasEtapasPendente,
     };
   }
 }

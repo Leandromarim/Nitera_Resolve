@@ -118,6 +118,15 @@ if [ -f .instalado ] && docker compose ps --status running postgres 2>/dev/null 
   verde "» Fazendo cópia do banco antes de atualizar: $arquivo"
   docker compose exec -T postgres pg_dump -U resolve -Fc resolve > "$arquivo" || { rm -f "$arquivo"; erro "Não consegui copiar o banco. A atualização foi cancelada e nada foi alterado."; }
   ls -1t "$backup_dir"/antes-da-atualizacao-*.dump 2>/dev/null | tail -n +11 | xargs -r rm -f  # guarda as 10 últimas
+  # confere que a cópia abre, protege a leitura e anota qual é desta atualização (e o código de antes do git pull):
+  # o deploy/voltar-versao.sh usa exatamente estes, e não "a mais nova que achar" (auditoria INF-05)
+  chmod 600 "$arquivo"
+  docker compose exec -T postgres pg_restore -l < "$arquivo" >/dev/null || erro "A cópia $arquivo não abre. A atualização foi cancelada e nada foi alterado."
+  commit_novo=$(git rev-parse HEAD 2>/dev/null || true)
+  commit_anterior=$(git rev-parse ORIG_HEAD 2>/dev/null || true)
+  [ "$commit_anterior" != "$commit_novo" ] || commit_anterior=""
+  printf 'resolve=%s\ncommit_anterior=%s\ncommit_novo=%s\n' "$arquivo" "$commit_anterior" "$commit_novo" > .dump-da-atualizacao
+  chmod 600 .dump-da-atualizacao
 fi
 
 # 6. Compila (só na primeira instalação: na atualização já foi feito com o sistema no ar) e sobe

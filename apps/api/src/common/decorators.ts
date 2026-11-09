@@ -12,6 +12,9 @@ export const Portal = () => SetMetadata(IS_PORTAL, true);
 export const SENHA_PROVISORIA_OK = 'senhaProvisoriaOk';
 /** Rota que quem entrou com senha provisória pode usar (as demais respondem 403 até a troca da senha). */
 export const SenhaProvisoriaOk = () => SetMetadata(SENHA_PROVISORIA_OK, true);
+export const DUAS_ETAPAS_OK = 'duasEtapasOk';
+/** Rota liberada para quem ainda precisa ativar a verificação em duas etapas obrigatória (ver perfil, ativar o código). */
+export const DuasEtapasOk = () => SetMetadata(DUAS_ETAPAS_OK, true);
 
 export const ROLES = 'roles';
 /** Restringe a rota aos perfis informados (ADMIN sempre tem acesso). */
@@ -28,6 +31,8 @@ export interface AuthUser {
   mfa?: boolean;
   /** entrou com senha provisória: só pode trocar a senha */
   prov?: boolean;
+  /** perfil exige duas etapas e a pessoa ainda não ativou: só pode ativar */
+  mfaPendente?: boolean;
 }
 
 export const CurrentUser = createParamDecorator((_: unknown, ctx: ExecutionContext): AuthUser | undefined => {

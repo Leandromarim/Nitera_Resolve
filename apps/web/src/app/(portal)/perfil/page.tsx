@@ -87,6 +87,8 @@ function PasswordCard({ forced }: { forced: boolean }) {
 function TwoFactorCard() {
   const { user, reload } = useAuth();
   const toast = useToast();
+  const router = useRouter();
+  const params = useSearchParams();
   const [setup, setSetup] = useState<{ secret: string; qrCode: string } | null>(null);
   const [disable, setDisable] = useState(false);
   const [code, setCode] = useState('');
@@ -110,6 +112,12 @@ function TwoFactorCard() {
       setSetup(null);
       setDisable(false);
       setCode('');
+      if (user?.duasEtapasPendente && path.endsWith('enable')) {
+        // perfil obrigado a usar duas etapas: pega um token novo, já liberado, e volta para onde a pessoa ia
+        await refreshSession();
+        router.replace(destinoSeguro(params.get('next'), '/'));
+        return;
+      }
       await reload();
     } catch (e: any) {
       toast(e.message, 'error');
@@ -132,6 +140,11 @@ function TwoFactorCard() {
         </Badge>
       </div>
       <div className="mt-5">
+        {user?.duasEtapasPendente && (
+          <p role="alert" className="mb-4 rounded-xl border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100">
+            Seu perfil exige a verificação em duas etapas. Ative agora para continuar usando o sistema.
+          </p>
+        )}
         {user?.totpEnabled ? (
           <Button variant="secondary" onClick={() => setDisable(true)}>
             <ShieldOff className="size-4" /> Desativar
@@ -213,12 +226,13 @@ function Profile() {
     }
   };
   const forced = useSearchParams().get('trocar') === '1' || !!user?.mustChangePassword;
+  const pendente = !!user?.duasEtapasPendente && !user?.mustChangePassword;
   if (!user) return null;
   return (
     <div className="mx-auto max-w-4xl w-full px-4 sm:px-6 lg:px-8 py-8">
       <PageHeader icon={<IconePonto ponto="pagina.perfil" className="size-5" />} title="Meu perfil e segurança" />
       <Card className="mb-6 flex flex-col gap-4 p-6 sm:flex-row sm:items-center">
-        {user.mustChangePassword ? <Avatar name={user.name} src={user.avatarUrl} size={80} /> : <AvatarPicker name={user.name} value={user.avatarUrl ?? null} onChange={saveAvatar} size={80} />}
+        {user.mustChangePassword || pendente ? <Avatar name={user.name} src={user.avatarUrl} size={80} /> : <AvatarPicker name={user.name} value={user.avatarUrl ?? null} onChange={saveAvatar} size={80} />}
         <div className="sm:ml-2 sm:border-l sm:border-slate-200 sm:pl-6 dark:sm:border-slate-700">
           <p className="text-xl font-semibold">{user.name}</p>
           <p className="text-sm text-slate-500">
@@ -237,6 +251,11 @@ function Profile() {
         // antes da primeira troca só a senha importa (com senha provisória o resto nem abre)
         <div className="mx-auto max-w-xl">
           <PasswordCard forced={forced} />
+        </div>
+      ) : pendente ? (
+        // perfil obrigado a usar duas etapas: só o autenticador importa até ativar
+        <div className="mx-auto max-w-xl">
+          <TwoFactorCard />
         </div>
       ) : (
         <div className="grid gap-6 lg:grid-cols-2">

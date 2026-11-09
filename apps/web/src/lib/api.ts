@@ -20,6 +20,8 @@ export interface SessionUser {
   departmentId?: string | null;
   totpEnabled: boolean;
   mustChangePassword: boolean;
+  /** o perfil exige verificação em duas etapas e a pessoa ainda não ativou: só o Meu perfil abre */
+  duasEtapasPendente?: boolean;
 }
 
 export class ApiError extends Error {

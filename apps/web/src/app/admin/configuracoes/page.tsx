@@ -2,11 +2,12 @@
 
 import { ImageUp, Info, Link2, MessageCircle, Palette, RotateCcw, Save, Settings, ShieldCheck } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { api, uploadFile } from '@/lib/api';
+import { api, uploadFile, type Role } from '@/lib/api';
+import { ROLE_LABEL } from '@/lib/format';
 import { DEFAULT_BRANDING, useBranding, type Branding } from '@/lib/branding';
 import { useApi } from '@/lib/use-api';
 import { RequireAuth } from '@/components/require-auth';
-import { Button, Card, EmptyState, Field, Input, Select, Loading, PageHeader, Switch, clsx, useToast } from '@/components/ui';
+import { Button, Card, EmptyState, Field, Input, Select, Loading, PageHeader, Switch, clsx, useConfirm, useToast } from '@/components/ui';
 import { QrModal, qrSrc } from '@/components/comum/qr';
 import { HistoryButton } from '@/components/versions/history';
 import { linkWhatsapp, numeroWhatsapp } from '@/lib/whatsapp';
@@ -128,6 +129,57 @@ function WhatsappQr({ number, enabled, onChange }: { number: string; enabled: bo
         <p className="text-xs text-slate-500">Preencha o número para ver o QR Code.</p>
       )}
       <QrModal open={open} onClose={() => setOpen(false)} title="WhatsApp do suporte" subtitle="Abra um chamado" href={href} linkLabel="Abrir a conversa" />
+    </div>
+  );
+}
+
+/** Perfis que só entram com a verificação em duas etapas (auditoria AUT-01): quem não ativou cai no Meu perfil até ativar. Vale na hora. */
+function AcessoPanel() {
+  const { data, reload } = useApi<{ duasEtapas: Role[]; perfisPossiveis: Role[] }>('/admin/acesso');
+  const toast = useToast();
+  const { confirm, dialog } = useConfirm();
+  const [salvando, setSalvando] = useState(false);
+  if (!data) return <Loading />;
+  const perfis = data.duasEtapas;
+  const alternar = async (r: Role) => {
+    const tirar = perfis.includes(r);
+    if (tirar && (r === 'ADMIN' || r === 'TI') && !(await confirm(`Deixar ${ROLE_LABEL[r]} entrar sem a verificação em duas etapas? Uma senha vazada passa a bastar para controlar o sistema.`))) return;
+    setSalvando(true);
+    try {
+      await api('/admin/acesso/duas-etapas', { method: 'PUT', json: { perfis: tirar ? perfis.filter((x) => x !== r) : [...perfis, r] } });
+      toast(tirar ? `${ROLE_LABEL[r]}: duas etapas opcional` : `${ROLE_LABEL[r]}: duas etapas obrigatória`);
+      reload();
+    } catch (e: any) {
+      toast(e.message, 'error');
+    } finally {
+      setSalvando(false);
+    }
+  };
+  return (
+    <div className={clsx(salvando && 'pointer-events-none opacity-60')}>
+      {dialog}
+      <p className="text-sm text-slate-500 dark:text-slate-400">
+        Quem tem um destes perfis e ainda não ativou o código do celular só consegue abrir o Meu perfil até ativar. Recomendado: Administrador e TI.
+      </p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {data.perfisPossiveis.map((r) => {
+          const on = perfis.includes(r);
+          return (
+            <button
+              key={r}
+              type="button"
+              aria-pressed={on}
+              onClick={() => alternar(r)}
+              className={clsx(
+                'rounded-full border px-3 py-1 text-sm transition',
+                on ? 'border-brand-600 bg-brand-600 text-white' : 'border-slate-300 text-slate-700 hover:bg-slate-100 dark:border-slate-600 dark:text-slate-200 dark:hover:bg-slate-800',
+              )}
+            >
+              {ROLE_LABEL[r]}
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -369,6 +421,10 @@ function SettingsAdmin() {
               </p>
             </div>
           </div>
+        </Panel>
+
+        <Panel icon={<ShieldCheck />} title="Acesso" description="Quem só entra com a verificação em duas etapas (código do celular).">
+          <AcessoPanel />
         </Panel>
       </div>
 

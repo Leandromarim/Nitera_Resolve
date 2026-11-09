@@ -114,6 +114,11 @@ git pull && sudo bash deploy/instalar.sh
 A versão nova é compilada com o sistema no ar. A tela de manutenção aparece só durante a cópia do banco e a troca dos serviços.
 As mudanças do banco (migrações) rodam sozinhas ao iniciar a API e só acrescentam: nenhuma apaga dados.
 
+Se a versão nova der problema, volte para a anterior (código e banco de antes da atualização; o banco de agora fica guardado com outro nome):
+```bash
+sudo bash deploy/voltar-versao.sh
+```
+
 ## 8. Segurança — checklist
 
 - [ ] `.env` com permissão 600 (o instalador já faz) e fora de qualquer backup que saia da instituição sem criptografia.

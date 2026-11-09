@@ -19,7 +19,7 @@ function fakePrisma(user: any) {
         return t;
       },
       findUnique: async ({ where }: any) => {
-        const t = tokens.find((x) => x.tokenHash === where.tokenHash);
+        const t = tokens.find((x) => (where.tokenHash ? x.tokenHash === where.tokenHash : x.id === where.id));
         return t ? { ...t, user } : null;
       },
       update: async ({ where, data }: any) => Object.assign(tokens.find((x) => x.id === where.id), data),
@@ -77,6 +77,27 @@ describe('AuthService', () => {
     expect(s3.refreshToken).not.toEqual(s2.refreshToken);
     await expect(svc.refresh(s2.refreshToken, {})).resolves.toBeTruthy();
     await expect(svc.refresh(s3.refreshToken, {})).resolves.toBeTruthy();
+  });
+
+  it('depois de sair, o token antigo não revive a sessão nem dentro da tolerância de 60 s (AUT-02)', async () => {
+    const prisma = fakePrisma(user);
+    const svc = new AuthService(prisma as any, new JwtService(), audit);
+    const s1: any = await svc.login('t', 'Senha@Forte123', undefined, false, {});
+    const s2 = await svc.refresh(s1.refreshToken, {});
+    await svc.logout(s2.refreshToken);
+    await expect(svc.refresh(s1.refreshToken, {})).rejects.toThrow(/encerrada/);
+    await expect(svc.refresh(s2.refreshToken, {})).rejects.toThrow();
+  });
+
+  it('a tolerância segue a corrente de trocas enquanto a sessão está viva', async () => {
+    const prisma = fakePrisma(user);
+    const svc = new AuthService(prisma as any, new JwtService(), audit);
+    const s1: any = await svc.login('t', 'Senha@Forte123', undefined, false, {});
+    const s2 = await svc.refresh(s1.refreshToken, {});
+    const s3 = await svc.refresh(s2.refreshToken, {});
+    await expect(svc.refresh(s1.refreshToken, {})).resolves.toBeTruthy();
+    await svc.logout(s3.refreshToken);
+    await expect(svc.refresh(s1.refreshToken, {})).rejects.toThrow(/encerrada/);
   });
 
   it('o login sem "manter conectado" vale 24 horas', async () => {

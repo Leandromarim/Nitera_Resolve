@@ -3,7 +3,7 @@ import { Reflector } from '@nestjs/core';
 import { JwtService } from '@nestjs/jwt';
 import { Role } from '@prisma/client';
 import { AcessoService } from './acesso';
-import { IS_PORTAL, IS_PUBLIC, ROLES, SENHA_PROVISORIA_OK, AuthUser } from './decorators';
+import { IS_PORTAL, IS_PUBLIC, ROLES, SENHA_PROVISORIA_OK, DUAS_ETAPAS_OK, AuthUser } from './decorators';
 
 /**
  * Guard global: exige um access token válido (Bearer) em todas as rotas,
@@ -30,7 +30,7 @@ export class AuthGuard implements CanActivate {
           audience: 'nitera-resolve',
           issuer: 'nitera-resolve-api',
         });
-        req.user = { id: payload.sub, name: payload.name, email: payload.email, roles: payload.roles, sid: payload.sid, mfa: payload.mfa === true, prov: payload.prov === true } as AuthUser;
+        req.user = { id: payload.sub, name: payload.name, email: payload.email, roles: payload.roles, sid: payload.sid, mfa: payload.mfa === true, prov: payload.prov === true, mfaPendente: payload.mfap === true } as AuthUser;
       } catch {
         if (!isPublic) throw new UnauthorizedException('Sessão expirada');
       }
@@ -40,6 +40,10 @@ export class AuthGuard implements CanActivate {
     // senha provisória: a sessão só serve para trocar a senha (o resto do sistema fica fechado até lá)
     if (req.user.prov && !this.reflector.getAllAndOverride<boolean>(SENHA_PROVISORIA_OK, [ctx.getHandler(), ctx.getClass()])) {
       throw new ForbiddenException('Troque a senha provisória para continuar.');
+    }
+    // perfil com duas etapas obrigatória (Configurações › Acesso) e ainda sem o autenticador: só ativa (auditoria AUT-01)
+    if (req.user.mfaPendente && !this.reflector.getAllAndOverride<boolean>(DUAS_ETAPAS_OK, [ctx.getHandler(), ctx.getClass()])) {
+      throw new ForbiddenException('Ative a verificação em duas etapas em Meu perfil para continuar.');
     }
 
     const roles = this.reflector.getAllAndOverride<Role[]>(ROLES, [ctx.getHandler(), ctx.getClass()]);

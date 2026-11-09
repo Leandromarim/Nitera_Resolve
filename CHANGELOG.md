@@ -1,5 +1,14 @@
 # Histórico de versões — NITERA Resolve
 
+## 1.0.1 — 2026-11-09
+
+Correções de segurança da auditoria da Intranet (4.55.0), trazidas para o Resolve.
+
+- Duas etapas obrigatória por perfil (padrão Administrador e TI), em Configurações › Acesso. Quem ainda não ativou só abre o Meu perfil até ativar (AUT-01).
+- Depois de sair ou trocar a senha, um token antigo não abre mais uma sessão nova, mantendo a tolerância entre abas (AUT-02).
+- Limpeza de marcações do texto em tempo linear no lugar da expressão regular lenta (COD-01).
+- `deploy/voltar-versao.sh`: volta o código e devolve o banco de antes da atualização num banco novo, guardando o atual; a cópia de antes da atualização é conferida e protegida (chmod 600) (INF-05).
+
 ## 1.0.0 — 2026-11-01
 
 Primeira versão como produto separado, a partir do sistema de chamados da Intranet 4.0 (até a 4.46.0).

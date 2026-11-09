@@ -49,5 +49,30 @@ function semUrlInsegura(attribs: sanitize.Attributes, nome: string): sanitize.At
   return resto;
 }
 
-/** Remove qualquer marcação — usado em textos simples (chat, chamados, ouvidoria). */
-export const stripTags = (v: string) => v.replace(/<[^>]*>/g, '').trim();
+/**
+ * Tira as marcações `<...>` de um texto em tempo linear. Faz o mesmo que `v.replace(/<[^>]*>/g, troca)`
+ * (ou `/<[^>]+>/g` com `vazia = false`), mas sem a lentidão quadrática dessa expressão com muitos `<`
+ * sem `>`: 100 mil caracteres levavam quase 7 s e travavam a API (auditoria COD-01, CWE-1333).
+ */
+export function tirarTags(v: string, troca = '', vazia = true): string {
+  let out = '';
+  let i = 0;
+  for (;;) {
+    const abre = v.indexOf('<', i);
+    if (abre < 0) break;
+    const fecha = v.indexOf('>', abre + 1);
+    // sem nenhum '>' depois daqui, nenhuma marcação adiante pode fechar: o resto fica como está
+    if (fecha < 0) break;
+    if (!vazia && fecha === abre + 1) {
+      out += v.slice(i, abre + 1);
+      i = abre + 1;
+      continue;
+    }
+    out += v.slice(i, abre) + troca;
+    i = fecha + 1;
+  }
+  return out + v.slice(i);
+}
+
+/** Remove qualquer marcação — usado em textos simples (chamados). */
+export const stripTags = (v: string) => tirarTags(v).trim();
